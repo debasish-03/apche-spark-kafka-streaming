@@ -1,0 +1,10 @@
+kafka:
+    url: kafka:9093
+postgres:
+    database: yeti
+    user: dd
+    password: dd123
+    host: postgres
+    port: 5432
+    driver: org.postgresql.Driver
+    format: jdbc

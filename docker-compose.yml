@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - 2181:2181
+    networks:
+      - kafka-network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://kafka:9093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9093,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - 9092:9092
+      - 9093:9093
+    networks:
+      - kafka-network
+
+
+  spark-master:
+    image: bitnami/spark:3.5.0
+    container_name: spark-master
+    environment:
+      SPARK_MODE: master
+    ports:
+      - 4041:4040 # Changes from 4040:4040 as 4040 is already in use
+      - 8080:8080  # Spark master UI
+    networks:
+      - kafka-network
+
+  spark-worker:
+    image: bitnami/spark:3.5.0
+    container_name: spark-worker
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+    depends_on:
+      - spark-master
+    ports:
+      - 8081:8081  # Worker UI port
+    networks:
+      - kafka-network
+
+  spark-app:
+    image: bitnami/spark:3.5.0
+    container_name: spark-app
+    depends_on:
+      - kafka
+      - spark-master
+    volumes:
+      - ./spark-app:/app
+    working_dir: /app
+    command: ["bash", "-c", "pip install -r requirement.txt && tail -f /dev/null"]
+    networks:
+      - kafka-network
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    depends_on:
+      - kafka
+    environment:
+      POSTGRES_USER: dd
+      POSTGRES_PASSWORD: dd123
+      POSTGRES_DB: yeti
+    ports:
+      - 5432:5432
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    driver: bridge
